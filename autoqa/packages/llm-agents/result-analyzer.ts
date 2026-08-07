@@ -1,8 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { z } from 'zod';
+import { zodResponseFormat } from 'openai/helpers/zod';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export const ResultAnalyzerSchema = z.object({
@@ -17,31 +18,19 @@ export type ResultAnalyzerOutput = z.infer<typeof ResultAnalyzerSchema>;
 
 export async function analyzeResults(artifacts: { logs: string, network: string, errorMessage?: string }): Promise<ResultAnalyzerOutput> {
   const systemPrompt = `You are result-analyzer, an AI agent that analyzes UI test execution artifacts.
-You output strictly JSON conforming to this schema:
-{
-  "status": "pass" | "fail",
-  "title": string,
-  "expected": string,
-  "actual": string,
-  "explanation": string
-}
-Evaluate the provided console logs, network logs, and any execution errors to determine if the test passed or failed.`;
+You output strictly JSON. Evaluate the provided console logs, network logs, and any execution errors to determine if the test passed or failed.`;
 
-  const msg = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 1024,
-    system: systemPrompt,
+  const response = await openai.beta.chat.completions.parse({
+    model: 'gpt-4o', // or another compatible model
     messages: [
-      {
-        role: 'user',
-        content: `Logs: ${artifacts.logs}\nNetwork: ${artifacts.network}\nError: ${artifacts.errorMessage || 'None'}`
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Logs: ${artifacts.logs}\nNetwork: ${artifacts.network}\nError: ${artifacts.errorMessage || 'None'}` },
     ],
+    response_format: zodResponseFormat(ResultAnalyzerSchema, "result_analysis"),
   });
 
-  const content = msg.content[0].type === 'text' ? msg.content[0].text : '';
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON found in response');
+  const analysis = response.choices[0].message.parsed;
+  if (!analysis) throw new Error('No JSON found in response');
 
-  return ResultAnalyzerSchema.parse(JSON.parse(jsonMatch[0]));
+  return analysis;
 }

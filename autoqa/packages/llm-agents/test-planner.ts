@@ -1,8 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { z } from 'zod';
+import { zodResponseFormat } from 'openai/helpers/zod';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export const TestPlanSchema = z.object({
@@ -18,29 +19,19 @@ export type TestPlan = z.infer<typeof TestPlanSchema>;
 
 export async function generateTestPlan(instruction: string, url: string): Promise<TestPlan> {
   const systemPrompt = `You are test-planner, an AI agent that converts developer instructions into a structured UI test plan.
-You output strictly JSON conforming to this schema:
-{
-  "steps": [
-    { "action": "navigate" | "click" | "fill" | "wait" | "assert", "selector": string, "value": string, "description": string }
-  ]
-}
-For accessibility tree / MCP interactions, use semantic roles or generic descriptions for 'selector' since actual Playwright MCP will resolve them. Make sure to always start with a 'navigate' action to the provided url.`;
+You output strictly JSON. For accessibility tree / MCP interactions, use semantic roles or generic descriptions for 'selector'. Make sure to always start with a 'navigate' action to the provided url.`;
 
-  const msg = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 1024,
-    system: systemPrompt,
+  const response = await openai.beta.chat.completions.parse({
+    model: 'gpt-4o', // or another compatible model
     messages: [
-      {
-        role: 'user',
-        content: `Instruction: ${instruction}\nURL: ${url}`
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Instruction: ${instruction}\nURL: ${url}` },
     ],
+    response_format: zodResponseFormat(TestPlanSchema, "test_plan"),
   });
 
-  const content = msg.content[0].type === 'text' ? msg.content[0].text : '';
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON found in response');
+  const plan = response.choices[0].message.parsed;
+  if (!plan) throw new Error('No JSON found in response');
 
-  return TestPlanSchema.parse(JSON.parse(jsonMatch[0]));
+  return plan;
 }
