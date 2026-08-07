@@ -1,0 +1,13 @@
+{
+  "name": "@autoqa/cli",
+  "version": "1.0.0",
+  "bin": {
+    "autoqa": "./bin/autoqa.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "@autoqa/db": "*",
+    "@autoqa/llm-agents": "*",
+    "@autoqa/test-executor": "*"
+  }
+}

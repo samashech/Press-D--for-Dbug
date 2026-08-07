@@ -1,0 +1,20 @@
+{
+  "name": "autoqa",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test:cli": "npm run cli --workspace=packages/cli"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "prisma@5.22.0": true,
+    "@prisma/engines@5.22.0": true
+  },
+  "devDependencies": {
+    "dotenv": "^17.4.2",
+    "tsx": "^4.23.11"
+  }
+}

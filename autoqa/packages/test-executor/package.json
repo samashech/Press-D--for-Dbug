@@ -1,0 +1,10 @@
+{
+  "name": "@autoqa/test-executor",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "playwright": "^1.49.0",
+    "@playwright/mcp": "^0.0.79",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
