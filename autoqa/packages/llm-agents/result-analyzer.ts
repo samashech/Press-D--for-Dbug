@@ -1,9 +1,8 @@
-import OpenAI from 'openai';
+import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { z } from 'zod';
-import { zodResponseFormat } from 'openai/helpers/zod';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 export const ResultAnalyzerSchema = z.object({
@@ -16,21 +15,34 @@ export const ResultAnalyzerSchema = z.object({
 
 export type ResultAnalyzerOutput = z.infer<typeof ResultAnalyzerSchema>;
 
+const responseSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    status: { type: Type.STRING, enum: ['pass', 'fail'] },
+    title: { type: Type.STRING },
+    expected: { type: Type.STRING },
+    actual: { type: Type.STRING },
+    explanation: { type: Type.STRING },
+  },
+  required: ['status', 'title', 'expected', 'actual', 'explanation'],
+};
+
 export async function analyzeResults(artifacts: { logs: string, network: string, errorMessage?: string }): Promise<ResultAnalyzerOutput> {
   const systemPrompt = `You are result-analyzer, an AI agent that analyzes UI test execution artifacts.
 You output strictly JSON. Evaluate the provided console logs, network logs, and any execution errors to determine if the test passed or failed.`;
 
-  const response = await openai.beta.chat.completions.parse({
-    model: 'gpt-4o', // or another compatible model
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Logs: ${artifacts.logs}\nNetwork: ${artifacts.network}\nError: ${artifacts.errorMessage || 'None'}` },
-    ],
-    response_format: zodResponseFormat(ResultAnalyzerSchema, "result_analysis"),
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: `Logs: ${artifacts.logs}\nNetwork: ${artifacts.network}\nError: ${artifacts.errorMessage || 'None'}`,
+    config: {
+      systemInstruction: systemPrompt,
+      responseMimeType: 'application/json',
+      responseSchema: responseSchema,
+    }
   });
 
-  const analysis = response.choices[0].message.parsed;
+  const analysis = response.text;
   if (!analysis) throw new Error('No JSON found in response');
 
-  return analysis;
+  return ResultAnalyzerSchema.parse(JSON.parse(analysis));
 }
