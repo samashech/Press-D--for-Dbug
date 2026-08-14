@@ -11,6 +11,9 @@ export const ResultAnalyzerSchema = z.object({
   expected: z.string(),
   actual: z.string(),
   explanation: z.string(),
+  likelyCause: z.string().optional(),
+  reproSteps: z.array(z.string()).optional(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
 });
 
 export type ResultAnalyzerOutput = z.infer<typeof ResultAnalyzerSchema>;
@@ -23,13 +26,21 @@ const responseSchema: Schema = {
     expected: { type: Type.STRING },
     actual: { type: Type.STRING },
     explanation: { type: Type.STRING },
+    likelyCause: { type: Type.STRING, nullable: true },
+    reproSteps: { 
+      type: Type.ARRAY, 
+      items: { type: Type.STRING },
+      nullable: true
+    },
+    severity: { type: Type.STRING, enum: ['low', 'medium', 'high', 'critical'], nullable: true },
   },
   required: ['status', 'title', 'expected', 'actual', 'explanation'],
 };
 
 export async function analyzeResults(artifacts: { logs: string, network: string, errorMessage?: string }): Promise<ResultAnalyzerOutput> {
   const systemPrompt = `You are result-analyzer, an AI agent that analyzes UI test execution artifacts.
-You output strictly JSON. Evaluate the provided console logs, network logs, and any execution errors to determine if the test passed or failed.`;
+You output strictly JSON. Evaluate the provided console logs, network logs, and any execution errors to determine if the test passed or failed.
+If the test fails, you must provide a detailed structured Bug Report including 'likelyCause', a step-by-step array of 'reproSteps', and a 'severity' level (low, medium, high, critical).`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
