@@ -1,0 +1,11 @@
+{
+  "name": "@autoqa/orchestrator",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "chokidar": "^4.0.0",
+    "simple-git": "^3.25.0",
+    "@autoqa/db": "*",
+    "@autoqa/llm-agents": "*"
+  }
+}
