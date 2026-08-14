@@ -3,6 +3,7 @@ import simpleGit from 'simple-git';
 import path from 'path';
 import { prisma } from '@autoqa/db';
 import { analyzeDiff } from '@autoqa/llm-agents';
+import { testQueue } from './queue';
 
 export async function startWatcher(repoPath: string, localUrl: string) {
   const git = simpleGit(repoPath);
@@ -63,7 +64,7 @@ export async function startWatcher(repoPath: string, localUrl: string) {
         }
       });
 
-      await prisma.feature.create({
+      const featureRecord = await prisma.feature.create({
         data: {
           projectId,
           commitId: commitRecord.id,
@@ -74,7 +75,14 @@ export async function startWatcher(repoPath: string, localUrl: string) {
       });
 
       console.log(`Feature discovered and saved: "${analysis.featureName}"`);
-      console.log(`Run 'autoqa review' to approve and test it.\n`);
+      console.log(`Adding to BullMQ testQueue for autonomous testing...`);
+      
+      await testQueue.add('run-test', {
+        featureId: featureRecord.id,
+        instruction: analysis.description,
+        url: localUrl
+      });
+      console.log(`Job enqueued successfully.\n`);
       
     } catch (err) {
       console.error('Error processing commit:', err);

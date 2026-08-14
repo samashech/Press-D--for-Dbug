@@ -3,9 +3,18 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "chokidar": "^4.0.0",
-    "simple-git": "^3.25.0",
     "@autoqa/db": "*",
-    "@autoqa/llm-agents": "*"
+    "@autoqa/llm-agents": "*",
+    "bullmq": "^6.1.1",
+    "chokidar": "^4.0.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ioredis": "^6.0.0",
+    "simple-git": "^3.25.0",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6"
   }
 }
