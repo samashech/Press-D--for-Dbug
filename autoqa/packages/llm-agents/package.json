@@ -1,7 +1,7 @@
 {
   "name": "@autoqa/llm-agents",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.ts",
   "dependencies": {
     "@google/genai": "^2.16.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
