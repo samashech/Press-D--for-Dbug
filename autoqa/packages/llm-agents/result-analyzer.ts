@@ -11,9 +11,9 @@ export const ResultAnalyzerSchema = z.object({
   expected: z.string(),
   actual: z.string(),
   explanation: z.string(),
-  likelyCause: z.string().optional(),
-  reproSteps: z.array(z.string()).optional(),
-  severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  likelyCause: z.string().nullable().optional(),
+  reproSteps: z.array(z.string()).nullable().optional(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional(),
 });
 
 export type ResultAnalyzerOutput = z.infer<typeof ResultAnalyzerSchema>;
@@ -43,7 +43,7 @@ You output strictly JSON. Evaluate the provided console logs, network logs, and 
 If the test fails, you must provide a detailed structured Bug Report including 'likelyCause', a step-by-step array of 'reproSteps', and a 'severity' level (low, medium, high, critical).`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     contents: `Logs: ${artifacts.logs}\nNetwork: ${artifacts.network}\nError: ${artifacts.errorMessage || 'None'}`,
     config: {
       systemInstruction: systemPrompt,

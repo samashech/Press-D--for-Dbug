@@ -1,0 +1,2 @@
+#define REDIS_VERSION "8.10.0"
+#define REDIS_VERSION_NUM 0x00080a00
