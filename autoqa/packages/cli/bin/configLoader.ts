@@ -5,7 +5,7 @@ import os from 'os';
 export let globalConfig: any = null;
 
 export function loadConfig() {
-  const configPath = path.join(process.cwd(), 'autoqa.config.json');
+  const configPath = path.join(process.cwd(), 'd-bug.config.json');
   if (fs.existsSync(configPath)) {
     try {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -15,7 +15,7 @@ export function loadConfig() {
       globalConfig = config;
       return config;
     } catch (e) {
-      console.error('Failed to parse autoqa.config.json');
+      console.error('Failed to parse d-bug.config.json');
     }
   } else {
     // Default fallback to global autoqa db

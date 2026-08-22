@@ -12,7 +12,7 @@ export interface GuardrailCheck {
 
 export async function isElementSafe(
   element: { text: string; selector?: string; formId?: string; formAction?: string },
-  configPath: string = path.join(process.cwd(), 'autoqa.config.json')
+  configPath: string = path.join(process.cwd(), 'd-bug.config.json')
 ): Promise<GuardrailCheck> {
   let config: any = {};
   if (fs.existsSync(configPath)) {

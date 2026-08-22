@@ -30,7 +30,7 @@ function createSingleProvider(roleConfig: any): LLMProvider {
 }
 
 export function getRoleProvider(role: 'diffAnalyzer' | 'testPlanner' | 'resultAnalyzer' | 'featureClassifier'): LLMProvider {
-  const configPath = path.join(process.cwd(), 'autoqa.config.json');
+  const configPath = path.join(process.cwd(), 'd-bug.config.json');
   if (fs.existsSync(configPath)) {
     try {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -45,7 +45,7 @@ export function getRoleProvider(role: 'diffAnalyzer' | 'testPlanner' | 'resultAn
         }
       }
     } catch (e) {
-      console.warn(`Failed to parse autoqa.config.json for LLM config: ${(e as any).message}`);
+      console.warn(`Failed to parse d-bug.config.json for LLM config: ${(e as any).message}`);
     }
   }
 

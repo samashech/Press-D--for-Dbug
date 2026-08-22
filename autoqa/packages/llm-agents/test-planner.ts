@@ -91,7 +91,7 @@ Once you have verified the instruction or are absolutely stuck, call 'playwright
 
       currentTurn++;
       
-      const configPath = path.join(process.cwd(), 'autoqa.config.json');
+      const configPath = path.join(process.cwd(), 'd-bug.config.json');
       let escalateToCloud = false;
       if (fs.existsSync(configPath)) {
         try {

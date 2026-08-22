@@ -11,7 +11,7 @@ const program = new Command();
 
 async function requireConfig() {
   if (!globalConfig) {
-    console.error(chalk.red('Error: autoqa.config.json is missing. Please run `autoqa init` first.'));
+    console.error(chalk.red('Error: d-bug.config.json is missing. Please run `d-bug init` first.'));
     process.exit(1);
   }
 
@@ -551,11 +551,11 @@ program
       };
 
       fs.writeFileSync(
-        path.join(process.cwd(), 'autoqa.config.json'),
+        path.join(process.cwd(), 'd-bug.config.json'),
         JSON.stringify(config, null, 2)
       );
 
-      console.log(chalk.green('Created autoqa.config.json'));
+      console.log(chalk.green('Created d-bug.config.json'));
       
       // Push prisma schema
       console.log(chalk.blue('Initializing database schema...'));
@@ -572,7 +572,7 @@ program
 
       await verifyCanary(config);
 
-      console.log(chalk.green.bold('\nAutoQA is ready! You can now run `autoqa watch` or `autoqa smoke`.'));
+      console.log(chalk.green.bold('\nAutoQA is ready! You can now run `d-bug watch` or `autoqa smoke`.'));
       
     } catch (err: any) {
       console.error(chalk.red('Error during init:'), err.message);

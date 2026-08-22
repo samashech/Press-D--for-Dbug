@@ -21,7 +21,7 @@ export async function runCrawl(startUrl: string, repoPath: string) {
   const toVisit = [startUrl];
   
   let maxPages = 10;
-  const configPath = path.join(process.cwd(), 'autoqa.config.json');
+  const configPath = path.join(process.cwd(), 'd-bug.config.json');
   if (fs.existsSync(configPath)) {
     const conf = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     maxPages = conf.audit?.maxPages || 10;

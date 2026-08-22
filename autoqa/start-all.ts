@@ -31,7 +31,7 @@ async function run() {
   const { repoPath, localUrl } = response;
   
   // Update the global config with the new targetUrl so requireConfig() passes
-  const configPath = path.join(process.cwd(), 'autoqa.config.json');
+  const configPath = path.join(process.cwd(), 'd-bug.config.json');
   if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     config.targetUrl = localUrl;

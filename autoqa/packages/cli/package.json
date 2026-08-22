@@ -2,7 +2,7 @@
   "name": "@autoqa/cli",
   "version": "1.0.0",
   "bin": {
-    "autoqa": "./bin/autoqa.ts"
+    "d-bug": "./bin/autoqa.ts"
   },
   "dependencies": {
     "@autoqa/db": "*",
