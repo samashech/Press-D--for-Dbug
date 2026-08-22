@@ -148,6 +148,8 @@ export class ClaudeProvider implements LLMProvider {
       usage: {
         promptTokens: response.usage.input_tokens,
         completionTokens: response.usage.output_tokens,
+        provider: this.name,
+        model: this.model
       }
     };
   }

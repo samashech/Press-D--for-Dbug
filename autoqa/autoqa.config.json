@@ -13,11 +13,18 @@
       "model": "llama3.1",
       "baseUrl": "http://localhost:11434/v1"
     },
-    "testPlanner": {
-      "provider": "claude",
-      "model": "claude-3-5-sonnet-20241022",
-      "apiKey": "env:ANTHROPIC_API_KEY"
-    },
+    "testPlanner": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "apiKey": "env:OPENAI_API_KEY"
+      },
+      {
+        "provider": "local",
+        "model": "llama3.1",
+        "baseUrl": "http://localhost:11434/v1"
+      }
+    ],
     "resultAnalyzer": {
       "provider": "openai",
       "model": "gpt-4o",

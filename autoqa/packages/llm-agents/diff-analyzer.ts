@@ -35,22 +35,25 @@ If the diff contains minor fixes, describe what needs to be verified.`;
   const response = await provider.generate({
     messages,
     responseSchema,
+    validate: (res) => {
+      const analysis = res.text;
+      if (!analysis) throw new Error('No JSON found in response');
+
+      let cleanAnalysis = analysis.trim();
+      if (cleanAnalysis.startsWith('```json')) cleanAnalysis = cleanAnalysis.substring(7);
+      if (cleanAnalysis.startsWith('```')) cleanAnalysis = cleanAnalysis.substring(3);
+      if (cleanAnalysis.endsWith('```')) cleanAnalysis = cleanAnalysis.slice(0, -3);
+
+      // This throws if parsing fails
+      DiffAnalyzerSchema.parse(JSON.parse(cleanAnalysis.trim()));
+    }
   });
 
-  const analysis = response.text;
-  if (!analysis) throw new Error('No JSON found in response');
-
-  // Try to parse the output as JSON. Sometimes models return markdown blocks (e.g. ```json ... ```)
+  const analysis = response.text!;
   let cleanAnalysis = analysis.trim();
-  if (cleanAnalysis.startsWith('```json')) {
-    cleanAnalysis = cleanAnalysis.substring(7);
-  }
-  if (cleanAnalysis.startsWith('```')) {
-    cleanAnalysis = cleanAnalysis.substring(3);
-  }
-  if (cleanAnalysis.endsWith('```')) {
-    cleanAnalysis = cleanAnalysis.slice(0, -3);
-  }
+  if (cleanAnalysis.startsWith('```json')) cleanAnalysis = cleanAnalysis.substring(7);
+  if (cleanAnalysis.startsWith('```')) cleanAnalysis = cleanAnalysis.substring(3);
+  if (cleanAnalysis.endsWith('```')) cleanAnalysis = cleanAnalysis.slice(0, -3);
 
   const result = DiffAnalyzerSchema.parse(JSON.parse(cleanAnalysis.trim()));
   return {

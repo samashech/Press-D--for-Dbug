@@ -101,6 +101,8 @@ export class OpenAIProvider implements LLMProvider {
       usage: {
         promptTokens: response.usage?.prompt_tokens || 0,
         completionTokens: response.usage?.completion_tokens || 0,
+        provider: this.name,
+        model: this.model
       }
     };
   }

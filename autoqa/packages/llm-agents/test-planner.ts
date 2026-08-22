@@ -2,6 +2,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { z } from 'zod';
 import path from 'path';
+import fs from 'fs';
+import chalk from 'chalk';
 import { LLMProvider, Message } from './providers/types';
 import { convertMcpTools } from './providers/mcp-converter';
 import { getRoleProvider } from './providers/factory';
@@ -26,7 +28,7 @@ export async function executeTestAutonomous(
   instruction: string, 
   url: string,
   provider?: LLMProvider
-): Promise<{ screenshotPath: string, usage?: any }> {
+): Promise<{ screenshotPath: string, usages?: any[] }> {
   console.log(`Starting autonomous execution for test run ${testRunId}...`);
   
   if (!provider) {
@@ -61,14 +63,15 @@ You have a maximum of 10 actions.
 Once you have verified the instruction or are absolutely stuck, call 'playwright_screenshot' as your FINAL step to take a screenshot and end the execution.`;
 
   const MAX_TURNS = 10;
-  const TIMEOUT_MS = 60000; // 60 seconds wall-clock timeout
-
+  const TIMEOUT_MS = 60000;
+  
   const startTime = Date.now();
   let currentTurn = 0;
   let isDone = false;
+  let noProgressTurns = 0;
+  const MAX_NO_PROGRESS = 2; // configurable number of turns
   
-  let totalPromptTokens = 0;
-  let totalCompletionTokens = 0;
+  const usageByProvider: Record<string, { provider: string, model: string, promptTokens: number, completionTokens: number }> = {};
 
   const messages: Message[] = [
     { role: 'system', content: systemPrompt },
@@ -86,11 +89,48 @@ Once you have verified the instruction or are absolutely stuck, call 'playwright
       }
 
       currentTurn++;
+      
+      const configPath = path.join(process.cwd(), 'autoqa.config.json');
+      let escalateToCloud = false;
+      if (fs.existsSync(configPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          escalateToCloud = !!config.escalateToCloud;
+        } catch(e) {}
+      }
+
+      let escalate = escalateToCloud && (noProgressTurns >= MAX_NO_PROGRESS);
+      if (escalate) {
+        console.log(chalk.yellow(`Agent stuck for ${noProgressTurns} turns. Escalating to cloud provider for this step...`));
+      }
+
       console.log(`[Turn ${currentTurn}] Sending message to AI...`);
       
-      const response = await provider.generate({ messages, tools });
-      totalPromptTokens += response.usage?.promptTokens || 0;
-      totalCompletionTokens += response.usage?.completionTokens || 0;
+      let response;
+      try {
+        response = await provider.generate({ 
+          messages, 
+          tools, 
+          forceFallback: escalate 
+        });
+      } catch (err: any) {
+        if (err.message.includes('forceFallback requested but no fallback providers')) {
+          // Escalation requested but no cloud provider configured. Just continue normally.
+          console.log(chalk.yellow('Escalation requested but no fallback provider available. Continuing with primary...'));
+          escalate = false;
+          response = await provider.generate({ messages, tools });
+        } else {
+          throw err;
+        }
+      }
+      
+      const u = response.usage;
+      const key = `${u.provider}-${u.model}`;
+      if (!usageByProvider[key]) {
+        usageByProvider[key] = { provider: u.provider || 'unknown', model: u.model || 'unknown', promptTokens: 0, completionTokens: 0 };
+      }
+      usageByProvider[key].promptTokens += u.promptTokens;
+      usageByProvider[key].completionTokens += u.completionTokens;
       
       if (response.text) {
         console.log(`AI response: ${response.text}`);
@@ -103,6 +143,7 @@ Once you have verified the instruction or are absolutely stuck, call 'playwright
       });
 
       if (response.toolCalls && response.toolCalls.length > 0) {
+        noProgressTurns = 0; // reset on progress
         for (const functionCall of response.toolCalls) {
           console.log(`AI called tool: ${functionCall.name} with args`, functionCall.args);
           
@@ -131,9 +172,15 @@ Once you have verified the instruction or are absolutely stuck, call 'playwright
           });
         }
       } else {
-        console.log("AI stopped calling tools. Forcing screenshot to end.");
-        await mcpClient.callTool({ name: 'playwright_screenshot', arguments: {} });
-        isDone = true;
+        noProgressTurns++;
+        if (noProgressTurns >= MAX_NO_PROGRESS && escalate) {
+            // We already escalated and it still made no progress!
+            console.log("Cloud provider also failed to make progress. Forcing screenshot to end.");
+            await mcpClient.callTool({ name: 'playwright_screenshot', arguments: {} });
+            isDone = true;
+        } else {
+            console.log(`AI stopped calling tools. (No progress turn ${noProgressTurns}/${MAX_NO_PROGRESS})`);
+        }
       }
     }
   } finally {
@@ -141,15 +188,13 @@ Once you have verified the instruction or are absolutely stuck, call 'playwright
   }
   
   const artifactsDir = path.join(process.cwd(), 'artifacts', testRunId);
+  
+  const usageArray = Object.values(usageByProvider);
+
   return { 
     screenshotPath: path.join(artifactsDir, 'final.png'),
     logs: '',
     network: '',
-    usage: {
-      provider: provider.name,
-      model: (provider as any).model || 'unknown',
-      promptTokens: totalPromptTokens,
-      completionTokens: totalCompletionTokens
-    }
+    usages: usageArray
   };
 }

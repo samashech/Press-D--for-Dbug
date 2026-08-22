@@ -107,6 +107,8 @@ export class GeminiProvider implements LLMProvider {
       usage: {
         promptTokens: response.usageMetadata?.promptTokenCount || 0,
         completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
+        provider: this.name,
+        model: this.model
       }
     };
   }

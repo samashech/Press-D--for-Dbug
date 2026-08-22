@@ -24,6 +24,8 @@ export interface LLMProvider {
     messages: Message[];
     tools?: ToolDefinition[];
     responseSchema?: any; // JSON Schema for structured output
+    forceFallback?: boolean; // If true, FallbackProvider skips its first (primary) provider
+    validate?: (response: any) => void; // Throw an error if the response is invalid
   }): Promise<{
     toolCalls?: ToolCall[];
     text?: string;

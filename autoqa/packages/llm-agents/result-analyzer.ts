@@ -40,21 +40,24 @@ If the test fails, you must provide a detailed structured Bug Report including '
   const response = await provider.generate({
     messages,
     responseSchema,
+    validate: (res) => {
+      const analysis = res.text;
+      if (!analysis) throw new Error('No JSON found in response');
+
+      let cleanAnalysis = analysis.trim();
+      if (cleanAnalysis.startsWith('```json')) cleanAnalysis = cleanAnalysis.substring(7);
+      if (cleanAnalysis.startsWith('```')) cleanAnalysis = cleanAnalysis.substring(3);
+      if (cleanAnalysis.endsWith('```')) cleanAnalysis = cleanAnalysis.slice(0, -3);
+
+      ResultAnalyzerSchema.parse(JSON.parse(cleanAnalysis.trim()));
+    }
   });
 
-  const analysis = response.text;
-  if (!analysis) throw new Error('No JSON found in response');
-
+  const analysis = response.text!;
   let cleanAnalysis = analysis.trim();
-  if (cleanAnalysis.startsWith('```json')) {
-    cleanAnalysis = cleanAnalysis.substring(7);
-  }
-  if (cleanAnalysis.startsWith('```')) {
-    cleanAnalysis = cleanAnalysis.substring(3);
-  }
-  if (cleanAnalysis.endsWith('```')) {
-    cleanAnalysis = cleanAnalysis.slice(0, -3);
-  }
+  if (cleanAnalysis.startsWith('```json')) cleanAnalysis = cleanAnalysis.substring(7);
+  if (cleanAnalysis.startsWith('```')) cleanAnalysis = cleanAnalysis.substring(3);
+  if (cleanAnalysis.endsWith('```')) cleanAnalysis = cleanAnalysis.slice(0, -3);
 
   const result = ResultAnalyzerSchema.parse(JSON.parse(cleanAnalysis.trim()));
   return {
