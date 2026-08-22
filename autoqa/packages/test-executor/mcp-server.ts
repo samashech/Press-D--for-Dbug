@@ -15,6 +15,8 @@ const server = new Server(
   { capabilities: { tools: {} } }
 );
 
+let networkInventory: { url: string, method: string, status: number }[] = [];
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -55,6 +57,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
+        name: 'playwright_a11y_snapshot',
+        description: 'Get the accessibility tree of the current page to find interactive elements',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      },
+      {
+        name: 'playwright_get_network_activity',
+        description: 'Get list of network endpoints captured since the browser started',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      },
+      {
         name: 'playwright_screenshot',
         description: 'Take a screenshot of the page. This finishes the tool execution process.',
         inputSchema: {
@@ -71,6 +89,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     browser = await chromium.launch();
     context = await browser.newContext();
     page = await context.newPage();
+    
+    page.on('response', (response) => {
+      const request = response.request();
+      if (request.resourceType() === 'fetch' || request.resourceType() === 'xhr') {
+        const url = request.url();
+        const method = request.method();
+        const status = response.status();
+        
+        // Ensure no exact duplicates
+        if (!networkInventory.find(n => n.url === url && n.method === method)) {
+          networkInventory.push({ url, method, status });
+        }
+      }
+    });
   }
 
   const { name, arguments: args } = request.params;
@@ -93,6 +125,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'playwright_evaluate') {
       const result = await page.evaluate(args?.expression as string);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    }
+
+    if (name === 'playwright_a11y_snapshot') {
+      const snapshot = await page.accessibility.snapshot();
+      return { content: [{ type: 'text', text: JSON.stringify(snapshot, null, 2) }] };
+    }
+
+    if (name === 'playwright_get_network_activity') {
+      return { content: [{ type: 'text', text: JSON.stringify(networkInventory, null, 2) }] };
     }
 
     if (name === 'playwright_screenshot') {

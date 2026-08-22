@@ -180,6 +180,10 @@ Once you have verified the instruction or are absolutely stuck, call 'playwright
             isDone = true;
         } else {
             console.log(`AI stopped calling tools. (No progress turn ${noProgressTurns}/${MAX_NO_PROGRESS})`);
+            messages.push({
+              role: 'user',
+              content: 'Please call a tool to make progress, or call playwright_screenshot if you have completed the instruction.'
+            });
         }
       }
     }

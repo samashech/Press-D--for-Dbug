@@ -1,5 +1,5 @@
 {
-  "targetUrl": "http://localhost:3000",
+  "targetUrl": "http://localhost:5173",
   "ignoredPaths": [
     "node_modules",
     "dist",
@@ -28,6 +28,11 @@
     "resultAnalyzer": {
       "provider": "openai",
       "model": "gpt-4o",
+      "apiKey": "env:OPENAI_API_KEY"
+    },
+    "featureClassifier": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
       "apiKey": "env:OPENAI_API_KEY"
     }
   }

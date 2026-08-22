@@ -37,6 +37,11 @@ model Feature {
   description   String
   status        String   // discovered | testing | verified | broken
   firstSeenAt   DateTime @default(now())
+  
+  discoveredVia String?  @default("git-diff") // git-diff | crawl | manual
+  pageUrl       String?
+  selector      String?
+  featureType   String?  // button | form | nav-link | animation-candidate | api-endpoint | llm-integration
   testRuns      TestRun[]
   llmUsages     LLMUsage[]
 }

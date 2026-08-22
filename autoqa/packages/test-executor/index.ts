@@ -74,3 +74,4 @@ export async function executeTest(testRunId: string, url: string, steps: any[]):
     errorMessage
   };
 }
+export * from './crawler';

@@ -172,15 +172,80 @@ program
     }
   });
 
+async function getOrCreateProject(repoPath: string, localUrl: string) {
+  const path = require('path');
+  let project = await prisma.project.findFirst({ where: { repoPath } });
+  if (!project) {
+    project = await prisma.project.create({
+      data: {
+        name: path.basename(repoPath),
+        repoPath,
+        localUrl,
+      }
+    });
+  }
+  return project.id;
+}
+
+program
+  .command('audit')
+  .description('Audit the current project by crawling and classifying features, saving them to the DB')
+  .argument('[repoPath]', 'Repository path to audit', process.cwd())
+  .option('--url <url>', 'Local dev server URL (overrides config)')
+  .action(async (repoPath, options) => {
+    const path = require('path');
+    await requireConfig();
+    const url = options.url || globalConfig.targetUrl;
+    
+    console.log(chalk.blue('Starting Phase A: Discovery Crawler...'));
+    const { runCrawl } = require('@autoqa/test-executor');
+    const featureMap = await runCrawl(url, path.resolve(repoPath));
+    
+    console.log(chalk.blue('\nStarting Phase B: Feature Classification...'));
+    const { getRoleProvider } = require('@autoqa/llm-agents/providers/factory');
+    const { classifyFeatures } = require('@autoqa/llm-agents');
+    
+    const provider = getRoleProvider('featureClassifier');
+    let totalFeatures = 0;
+    
+    for (const page of featureMap.pages) {
+      console.log(chalk.gray(`Classifying features for ${page.url}...`));
+      const result = await classifyFeatures(page.url, page.a11y, page.endpoints, featureMap.integrations, provider);
+      
+      const projectId = await getOrCreateProject(path.resolve(repoPath), url);
+      
+      for (const feature of result.features) {
+        await prisma.feature.create({
+          data: {
+            projectId,
+            name: feature.name,
+            description: feature.description,
+            status: 'discovered',
+            discoveredVia: 'crawl',
+            pageUrl: feature.pageUrl || page.url,
+            selector: feature.selector,
+            featureType: feature.featureType
+          }
+        });
+        totalFeatures++;
+        console.log(chalk.green(`  + Discovered [${feature.featureType}]: ${feature.name}`));
+      }
+    }
+    
+    console.log(chalk.bold.green(`\nAudit Discovery Complete! Saved ${totalFeatures} features to the database.`));
+  });
+
 program
   .command('watch')
   .description('Watch git repository for new commits, discover features, and enqueue them')
+  .argument('[repoPath]', 'Repository path to watch', process.cwd())
   .option('--url <url>', 'Local dev server URL (overrides config)')
-  .action(async (options) => {
-    requireConfig();
+  .action(async (repoPath, options) => {
+    const path = require('path');
+    await requireConfig();
     const url = options.url || globalConfig.targetUrl;
     try {
-      await startWatcher(process.cwd(), url);
+      await startWatcher(path.resolve(repoPath), url);
     } catch (err: any) {
       console.error(chalk.red('Error starting watcher:'), err.message);
       process.exit(1);

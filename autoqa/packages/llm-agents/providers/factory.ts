@@ -29,7 +29,7 @@ function createSingleProvider(roleConfig: any): LLMProvider {
   }
 }
 
-export function getRoleProvider(role: 'diffAnalyzer' | 'testPlanner' | 'resultAnalyzer'): LLMProvider {
+export function getRoleProvider(role: 'diffAnalyzer' | 'testPlanner' | 'resultAnalyzer' | 'featureClassifier'): LLMProvider {
   const configPath = path.join(process.cwd(), 'autoqa.config.json');
   if (fs.existsSync(configPath)) {
     try {

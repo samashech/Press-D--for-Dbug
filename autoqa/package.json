@@ -6,7 +6,8 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "test:cli": "npm run cli --workspace=packages/cli"
+    "test:cli": "npm run cli --workspace=packages/cli",
+    "start:all": "tsx start-all.ts"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,
