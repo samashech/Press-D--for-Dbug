@@ -52,12 +52,47 @@ export async function runTestExecution(featureId: string, instruction: string, u
       console.log(chalk.blue('Running autonomous test execution with MCP...'));
       const start = Date.now();
       try {
+        const { calculateCost } = require('@autoqa/llm-agents/providers/cost-calculator');
         artifacts = await executeTestAutonomous(testRun.id, instruction, url);
         durationMs = Date.now() - start;
         console.log(chalk.gray(`Execution finished. Screenshot saved to ${artifacts?.screenshotPath}`));
 
+        if (artifacts.usage) {
+           const u = artifacts.usage;
+           const cost = calculateCost(u.provider, u.model, u.promptTokens, u.completionTokens);
+           await prisma.lLMUsage.create({
+             data: {
+               testRunId: testRun.id,
+               role: 'testPlanner',
+               provider: u.provider,
+               model: u.model,
+               promptTokens: u.promptTokens,
+               completionTokens: u.completionTokens,
+               costUsd: cost
+             }
+           });
+           console.log(chalk.gray(`[Token Usage] testPlanner (${u.model}): ${u.promptTokens} prompt, ${u.completionTokens} completion. Cost: $${cost.toFixed(4)}`));
+        }
+
         console.log(chalk.blue('Analyzing results with result-analyzer LLM...'));
-        analysis = await analyzeResults(artifacts);
+        analysis = await analyzeResults(artifacts as any);
+        
+        if (analysis.usage) {
+           const u = analysis.usage;
+           const cost = calculateCost(u.provider, u.model, u.promptTokens, u.completionTokens);
+           await prisma.lLMUsage.create({
+             data: {
+               testRunId: testRun.id,
+               role: 'resultAnalyzer',
+               provider: u.provider,
+               model: u.model,
+               promptTokens: u.promptTokens,
+               completionTokens: u.completionTokens,
+               costUsd: cost
+             }
+           });
+           console.log(chalk.gray(`[Token Usage] resultAnalyzer (${u.model}): ${u.promptTokens} prompt, ${u.completionTokens} completion. Cost: $${cost.toFixed(4)}`));
+        }
       } catch (err: any) {
         durationMs = Date.now() - start;
         analysis = {
@@ -123,6 +158,16 @@ export async function runTestExecution(featureId: string, instruction: string, u
         }
       });
     }
+
+    const usages = await prisma.lLMUsage.findMany({ where: { testRunId: testRun.id } });
+    const totalPrompt = usages.reduce((acc: number, u: any) => acc + u.promptTokens, 0);
+    const totalCompletion = usages.reduce((acc: number, u: any) => acc + u.completionTokens, 0);
+    const totalCost = usages.reduce((acc: number, u: any) => acc + u.costUsd, 0);
+    
+    console.log(`\n${chalk.magenta('💰 Run Usage Summary:')}`);
+    console.log(chalk.gray(`Total Tokens: ${totalPrompt} prompt + ${totalCompletion} completion`));
+    console.log(chalk.gray(`Estimated Cost: $${totalCost.toFixed(4)}`));
+
     console.log('================================================================================\n');
   } catch (error: any) {
     console.error(chalk.red(`[Runner] Error executing test:`), error.message);

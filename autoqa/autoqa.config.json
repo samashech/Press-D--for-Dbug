@@ -1,0 +1,27 @@
+{
+  "targetUrl": "http://localhost:3000",
+  "ignoredPaths": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage"
+  ],
+  "databaseUrl": "file:/home/samash/.autoqa/dev.db",
+  "llm": {
+    "diffAnalyzer": {
+      "provider": "local",
+      "model": "llama3.1",
+      "baseUrl": "http://localhost:11434/v1"
+    },
+    "testPlanner": {
+      "provider": "claude",
+      "model": "claude-3-5-sonnet-20241022",
+      "apiKey": "env:ANTHROPIC_API_KEY"
+    },
+    "resultAnalyzer": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "apiKey": "env:OPENAI_API_KEY"
+    }
+  }
+}

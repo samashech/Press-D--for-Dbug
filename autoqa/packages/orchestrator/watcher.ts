@@ -81,6 +81,24 @@ export async function startWatcher(repoPath: string, localUrl: string) {
           }
         });
 
+        if (analysis.usage) {
+           const { calculateCost } = require('@autoqa/llm-agents/providers/cost-calculator');
+           const u = analysis.usage;
+           const cost = calculateCost(u.provider, u.model, u.promptTokens, u.completionTokens);
+           await prisma.lLMUsage.create({
+             data: {
+               featureId: featureRecord.id,
+               role: 'diffAnalyzer',
+               provider: u.provider,
+               model: u.model,
+               promptTokens: u.promptTokens,
+               completionTokens: u.completionTokens,
+               costUsd: cost
+             }
+           });
+           console.log(`[Token Usage] diffAnalyzer (${u.model}): ${u.promptTokens} prompt, ${u.completionTokens} completion. Cost: $${cost.toFixed(4)}`);
+        }
+
         console.log(`Feature discovered and saved: "${analysis.featureName}"`);
         console.log(`Adding to BullMQ testQueue for autonomous testing...`);
         

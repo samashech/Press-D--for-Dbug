@@ -24,6 +24,7 @@ export function startDashboardServer() {
       take: 20,
       include: {
         feature: true,
+        llmUsages: true,
         testCases: {
           include: { bugReports: true }
         }
@@ -43,6 +44,7 @@ export async function broadcastUpdate(testRunId: string) {
     where: { id: testRunId },
     include: {
       feature: true,
+      llmUsages: true,
       testCases: {
         include: { bugReports: true }
       }

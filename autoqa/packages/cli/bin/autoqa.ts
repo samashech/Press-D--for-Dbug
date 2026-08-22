@@ -42,6 +42,48 @@ async function requireConfig() {
     console.error(chalk.red('Error: Redis is not running on 127.0.0.1:6379. AutoQA requires Redis for its background worker queue.'));
     process.exit(1);
   }
+
+  // 3. Canary checks
+  await verifyCanary(globalConfig);
+}
+
+async function verifyCanary(config: any) {
+  if (!config.llm) return;
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+  const crypto = require('crypto');
+
+  const dbDir = path.join(os.homedir(), '.autoqa');
+  const canaryHashFile = path.join(dbDir, 'canary_hash');
+  const currentHash = crypto.createHash('md5').update(JSON.stringify(config.llm)).digest('hex');
+
+  let lastHash = '';
+  if (fs.existsSync(canaryHashFile)) {
+    lastHash = fs.readFileSync(canaryHashFile, 'utf8');
+  }
+
+  if (lastHash !== currentHash) {
+    console.log(chalk.blue('Config changed. Running LLM canary checks...'));
+    const { getRoleProvider } = require('@autoqa/llm-agents/providers/factory');
+    const { runCanaryCheck } = require('@autoqa/llm-agents/providers/canary');
+
+    const roles = ['diffAnalyzer', 'testPlanner', 'resultAnalyzer'];
+    for (const role of roles) {
+      if (config.llm[role]) {
+        console.log(chalk.gray(`Testing ${role} provider...`));
+        const provider = getRoleProvider(role as any);
+        const result = await runCanaryCheck(provider);
+        if (!result.success) {
+          console.error(chalk.red(`⚠️ Warning: ${role} provider (${provider.name}) failed compatibility check:`), result.reason);
+          console.error(chalk.yellow(`This provider/model may not be reliable for tool-calling or structured JSON.`));
+        } else {
+          console.log(chalk.green(`✅ ${role} provider (${provider.name}) passed.`));
+        }
+      }
+    }
+    fs.writeFileSync(canaryHashFile, currentHash);
+  }
 }
 
 program
@@ -239,21 +281,92 @@ program
         },
         {
           type: 'text',
-          name: 'geminiKey',
-          message: 'Enter your Google Gemini API Key:',
-          initial: process.env.GEMINI_API_KEY || ''
-        },
-        {
-          type: 'text',
           name: 'ignoredPaths',
           message: 'Comma-separated paths to ignore in watcher:',
           initial: 'node_modules,dist,build,coverage'
+        },
+        {
+          type: 'confirm',
+          name: 'sameConfig',
+          message: 'Use the same LLM provider and model for all roles?',
+          initial: true
         }
       ]);
 
       if (!response.targetUrl) {
         console.log(chalk.red('Initialization cancelled.'));
         return;
+      }
+
+      async function askProviderConfig(role: string) {
+        const pResponse = await prompts([
+          {
+            type: 'select',
+            name: 'provider',
+            message: `Which provider for ${role}?`,
+            choices: [
+              { title: 'Gemini', value: 'gemini' },
+              { title: 'Claude', value: 'claude' },
+              { title: 'OpenAI', value: 'openai' },
+              { title: 'Local (Ollama/LM Studio)', value: 'local' }
+            ]
+          },
+          {
+            type: 'text',
+            name: 'model',
+            message: `Which model for ${role}?`,
+            initial: (prev) => {
+              if (prev === 'gemini') return 'gemini-2.5-flash';
+              if (prev === 'claude') return 'claude-3-5-sonnet-20241022';
+              if (prev === 'openai') return 'gpt-4o';
+              if (prev === 'local') return 'llama3.1';
+              return '';
+            }
+          }
+        ]);
+        
+        let apiKey: string | undefined;
+        let baseUrl: string | undefined;
+
+        if (pResponse.provider === 'local') {
+          const localResp = await prompts({
+            type: 'text',
+            name: 'baseUrl',
+            message: `Base URL for local provider (${role}):`,
+            initial: 'http://localhost:11434/v1'
+          });
+          baseUrl = localResp.baseUrl;
+        } else {
+          const defaultEnv = {
+            'gemini': 'GEMINI_API_KEY',
+            'claude': 'ANTHROPIC_API_KEY',
+            'openai': 'OPENAI_API_KEY'
+          }[pResponse.provider as string] || '';
+          
+          const keyResp = await prompts({
+            type: 'text',
+            name: 'apiKeyEnv',
+            message: `Environment variable for ${pResponse.provider} API key (${role}):`,
+            initial: defaultEnv
+          });
+          if (keyResp.apiKeyEnv) {
+            apiKey = `env:${keyResp.apiKeyEnv}`;
+          }
+        }
+
+        return { provider: pResponse.provider, model: pResponse.model, apiKey, baseUrl };
+      }
+
+      const llmConfig: any = {};
+      if (response.sameConfig) {
+        const sharedConfig = await askProviderConfig('all roles');
+        llmConfig.diffAnalyzer = { ...sharedConfig };
+        llmConfig.testPlanner = { ...sharedConfig };
+        llmConfig.resultAnalyzer = { ...sharedConfig };
+      } else {
+        llmConfig.diffAnalyzer = await askProviderConfig('diffAnalyzer');
+        llmConfig.testPlanner = await askProviderConfig('testPlanner');
+        llmConfig.resultAnalyzer = await askProviderConfig('resultAnalyzer');
       }
 
       const fs = require('fs');
@@ -270,9 +383,9 @@ program
       
       const config = {
         targetUrl: response.targetUrl,
-        geminiApiKey: response.geminiKey,
         ignoredPaths: response.ignoredPaths.split(',').map((s: string) => s.trim()),
-        databaseUrl: `file:${dbPath}`
+        databaseUrl: `file:${dbPath}`,
+        llm: llmConfig
       };
 
       fs.writeFileSync(
@@ -294,6 +407,8 @@ program
       } catch (e: any) {
         console.error(chalk.yellow('Failed to automatically push database schema. You may need to do it manually. ' + e.message));
       }
+
+      await verifyCanary(config);
 
       console.log(chalk.green.bold('\nAutoQA is ready! You can now run `autoqa watch` or `autoqa smoke`.'));
       

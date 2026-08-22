@@ -12,9 +12,6 @@ export function loadConfig() {
       if (config.databaseUrl) {
         process.env.DATABASE_URL = config.databaseUrl;
       }
-      if (config.geminiApiKey) {
-        process.env.GEMINI_API_KEY = config.geminiApiKey;
-      }
       globalConfig = config;
       return config;
     } catch (e) {

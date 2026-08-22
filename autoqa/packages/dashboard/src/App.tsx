@@ -66,6 +66,22 @@ function App() {
                 ))}
               </div>
             )}
+            
+            {run.llmUsages && run.llmUsages.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                <div className="flex gap-4">
+                  <span>
+                    Tokens: {run.llmUsages.reduce((sum: number, u: any) => sum + u.promptTokens + u.completionTokens, 0).toLocaleString()}
+                  </span>
+                  <span>
+                    Providers: {[...new Set(run.llmUsages.map((u: any) => u.provider))].join(', ')}
+                  </span>
+                </div>
+                <div className="font-medium text-gray-700">
+                  Cost: ${run.llmUsages.reduce((sum: number, u: any) => sum + u.costUsd, 0).toFixed(4)}
+                </div>
+              </div>
+            )}
           </div>
         ))}
         

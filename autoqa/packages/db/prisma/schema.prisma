@@ -38,6 +38,7 @@ model Feature {
   status        String   // discovered | testing | verified | broken
   firstSeenAt   DateTime @default(now())
   testRuns      TestRun[]
+  llmUsages     LLMUsage[]
 }
 
 model TestRun {
@@ -49,6 +50,7 @@ model TestRun {
   startedAt     DateTime @default(now())
   finishedAt    DateTime?
   testCases     TestCase[]
+  llmUsages     LLMUsage[]
 }
 
 model TestCase {
@@ -80,4 +82,19 @@ model Notification {
   bugReport     BugReport @relation(fields: [bugReportId], references: [id])
   channel       String
   sentAt        DateTime  @default(now())
+}
+
+model LLMUsage {
+  id               String   @id @default(uuid())
+  testRunId        String?
+  testRun          TestRun?  @relation(fields: [testRunId], references: [id])
+  featureId        String?
+  feature          Feature?  @relation(fields: [featureId], references: [id])
+  role             String
+  provider         String
+  model            String
+  promptTokens     Int
+  completionTokens Int
+  costUsd          Float
+  createdAt        DateTime @default(now())
 }
