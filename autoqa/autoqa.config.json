@@ -31,9 +31,9 @@
       "apiKey": "env:OPENAI_API_KEY"
     },
     "featureClassifier": {
-      "provider": "openai",
-      "model": "gpt-4o-mini",
-      "apiKey": "env:OPENAI_API_KEY"
+      "provider": "local",
+      "model": "llama3.1",
+      "apiKey": ""
     }
   }
 }

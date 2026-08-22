@@ -128,7 +128,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === 'playwright_a11y_snapshot') {
-      const snapshot = await page.accessibility.snapshot();
+      const snapshot = await page.evaluate(() => {
+        const elements = document.querySelectorAll('button, a, input, select, textarea, form, [role="button"], [role="link"], [role="menuitem"], [role="switch"]');
+        return Array.from(elements).map(el => {
+          const rect = el.getBoundingClientRect();
+          return {
+            role: el.tagName.toLowerCase(),
+            name: (el.getAttribute('aria-label') || el.textContent || '').trim().substring(0, 50),
+            selector: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ').join('.') : ''),
+            visible: rect.width > 0 && rect.height > 0
+          };
+        }).filter(e => e.visible);
+      });
       return { content: [{ type: 'text', text: JSON.stringify(snapshot, null, 2) }] };
     }
 
