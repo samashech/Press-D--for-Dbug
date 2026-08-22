@@ -1,133 +1,196 @@
-# AutoQA: You build it. We test it.
+# D-bug 🐛
 
-## Why do we need this?
-We've all been there: you finish a shiny new feature or make a minor update, only to realize you now have to painstakingly click through the app to make sure you didn't break anything else. Repeating manual tests after every single change is tedious and soul-crushing.
+An autonomous, local-first, AI-driven end-to-end testing agent that discovers, classifies, and tests your web applications without requiring you to write a single line of test code.
 
-**The solution?** AutoQA completely removes the burden of manual QA. It acts as an autonomous testing agent that watches your repository, discovers what you're working on, and automatically generates and executes end-to-end tests for your application in real-time.
+### 🎯 The Problem it Solves
 
-## What it is
+Traditional E2E UI testing is a massive bottleneck. Writing Playwright or Cypress scripts is time-consuming, and they are notoriously brittle—breaking the moment a developer changes a CSS class or DOM structure. Furthermore, existing "AI QA" platforms force you to route your proprietary code and API traffic through their expensive, closed-ecosystem cloud servers.
 
-### Key Features
-- **Zero-Touch Testing**: Just write code. AutoQA watches your git commits and automatically tests new features.
-- **AI-Powered Reasoning**: Uses Large Language Models (Gemini) to understand natural language instructions and application states.
-- **Headless Browser Automation**: Executes real browser interactions using Playwright.
-- **Real-Time Dashboard**: Watch your tests execute step-by-step in a sleek web interface.
-- **Background Job Queue**: Asynchronous processing using Redis and BullMQ so your local dev flow isn't blocked.
+D-bug solves this by using dynamic LLM agents to visually and structurally understand your app in real-time, executing tests resiliently via the Model Context Protocol (MCP). It does this while keeping you entirely in control of your data, models, and costs.
 
-### Architecture
+<!-- TODO: add a short GIF of the dashboard mid-run -->
+
+### ✨ Key Features
+
+- **Multi-provider BYOK (Bring Your Own Key):** Agnostic LLM support. Plug in OpenAI, Anthropic, Gemini, or run entirely offline with local open-source models via Ollama/LM Studio.
+- **Smart Fallback Escalation:** Configure D-bug to attempt tests using free, local models first, automatically escalating to smarter cloud models (like GPT-4o) only if the local model gets stuck or fails a structured output parse.
+- **Autonomous Discovery (Audit Mode):** A built-in crawler that navigates your app, simulates accessibility snapshots, intercepts network requests, and uses AI to map out every interactive feature automatically.
+- **Intelligent Test Generation:** Generates bespoke testing strategies based on feature types (e.g., asserting CSS bounding-box changes for animations, or injecting safe fixture data for forms).
+- **Cost & Token Tracking:** Granular tracking of every token burned, calculating exact USD costs per run, complete with budget ceilings to prevent runaway AI loops.
+
+### 🏗 Architecture
+
 ```mermaid
-graph TD
-    A[Local Project / Git Watcher] -->|Triggers| B[AutoQA CLI]
-    B -->|Enqueues Test| C[Redis Queue]
-    C -->|Pulls Job| D[AutoQA Worker]
-    D <-->|Analyzes & Decides| E[LLM / Reasoning Engine]
-    D <-->|Interacts| F[Playwright Browser]
-    D -->|Emits Events| G[Socket.io Server]
-    G -->|Updates UI| H[React Dashboard]
+flowchart TD
+    %% CLI / Nervous System
+    Watcher["D-bug Watcher\n(Git changes / FS)"]
+    CLI["CLI Audit Mode\n(Crawler)"]
+    Queue[("Redis Queue\n(BullMQ)")]
+    Worker["D-bug Worker\n(Job Runner)"]
+
+    %% The Brain
+    Brain["LLM Agents\n(testPlanner, etc.)"]
+    CloudLLM["Cloud LLMs\n(OpenAI, etc.)"]
+    LocalLLM["Local LLMs\n(Ollama)"]
+
+    %% The Hands
+    MCP["MCP Server\n(test-executor)"]
+    Playwright["Playwright Browser"]
+    Target["Your Web App"]
+
+    %% The Memory
+    DB[("SQLite DB\n(Prisma)")]
+
+    %% The Face
+    Dashboard["React Dashboard\n(Vite)"]
+    Socket["WebSockets"]
+
+    %% Flow
+    Watcher -->|Diff Features| Queue
+    CLI -->|Audit Features| Queue
+    Queue -->|Pulls jobs| Worker
+    
+    Worker <-->|Generates steps| Brain
+    Brain <-->|Inference| CloudLLM
+    Brain <-->|Inference| LocalLLM
+    
+    Worker <-->|Executes tool calls| MCP
+    MCP <--> Playwright
+    Playwright <--> Target
+    
+    Worker -->|Save state & cost| DB
+    Worker -->|Broadcasts progress| Socket
+    Socket --> Dashboard
 ```
 
-### Execution Workflow
-1. **Trigger**: You commit a change or manually issue a test command via the CLI.
-2. **Queue**: The test instruction is formatted and pushed into a Redis-backed queue.
-3. **Reasoning**: The worker picks up the job and uses an LLM to analyze the page state and decide the next best action.
-4. **Execution**: The chosen action (click, type, navigate) is performed on a headless browser.
-5. **Report**: Results, logs, and screenshots are broadcasted to the dashboard and saved to the database.
+### 🔄 Workflow
 
-## Get it running
+1. **Trigger:** Save a file (triggering the Git watcher) OR run `d-bug audit`.
+2. **Analysis:** The `diffAnalyzer` or `featureClassifier` LLM identifies interactive features and queues them in Redis.
+3. **Agentic Execution:** The BullMQ worker boots a headless Chromium browser wrapped in an MCP server.
+4. **Autonomous Loop:** The `testPlanner` AI interacts via MCP (click/fill), observes results, and loops until it proves the feature works.
+5. **Real-time Dashboard:** Screenshots and exact token costs stream via Socket.IO to your local React dashboard.
 
-### Prerequisites
-Before starting, ensure you have a Redis server running. AutoQA uses it for its background job queue.
+### 📋 Prerequisites
+
+- **Node.js**: v18 or higher (v26+ supported).
+- **Redis**: Must be running locally (e.g., `docker run -d -p 6379:6379 redis`) for the BullMQ job queue.
+- **Playwright**: Browsers must be installed via `npx playwright install`.
+- **LLM Provider**: An API key (OpenAI/Anthropic/Gemini) OR a running local instance like Ollama.
+
+### 🚀 Quickstart
+
+1. **Clone and Install:**
+```bash
+git clone <repo-url> d-bug
+cd d-bug
+npm install
+npm run build
+npx playwright install
+```
+
+2. **Link the CLI globally (Optional but recommended):**
+```bash
+npm link --workspace=@autoqa/cli
+```
+
+3. **Initialize in your target project:**
+```bash
+cd /path/to/your/app
+d-bug init
+```
+
+4. **Start the magic:**
+```bash
+# In the d-bug monorepo root:
+npm run start:all
+```
+*(This launches the wizard to boot the Watcher, Worker, Dashboard UI, and Dashboard Server concurrently).*
+
+### 💻 CLI Reference
+
+*(Note: The binary name is `d-bug`, but the package is internally referred to as `@autoqa/cli` for historical reasons).*
+
+| Command | Description |
+|---|---|
+| `d-bug init` | Interactive wizard to set up your LLM providers, API keys, and environment variables. |
+| `d-bug watch` | Starts the daemon that monitors your git repository for saved changes. |
+| `d-bug worker` | Starts the BullMQ worker to process queued tests autonomously. |
+| `d-bug dashboard-server` | Boots the WebSocket server for the UI dashboard. |
+| `d-bug audit [--force] [--url <url>]` | Crawls the current project, discovers all features, and sequentially tests them against your configured budget. |
+| `d-bug test <instruction>` | Manually forces the agent to execute a specific natural-language test instruction in the browser. |
+| `d-bug review` | Interactive CLI review of discovered features to selectively trigger tests. |
+| `d-bug smoke` | Run a deterministic smoke test skipping the LLM entirely. |
+
+### ⚙ Config Reference (`d-bug.config.json`)
+
+When you run `d-bug init`, it creates a `d-bug.config.json` file in your root:
+
+| Key | Type | Default | Purpose |
+|---|---|---|---|
+| `targetUrl` | `string` | `"http://localhost:5173"` | The local dev server URL D-bug will test against. |
+| `ignoredPaths` | `string[]` | `["node_modules", "dist", "build", "coverage"]` | Directories the Git watcher will ignore. |
+| `databaseUrl` | `string` | `"file:/home/<user>/.autoqa/dev.db"` | Path to the local SQLite database. |
+| `llm.<agentType>` | `object \| array` | *(Depends on init)* | Configuration for `testPlanner`, `featureClassifier`, `diffAnalyzer`, and `resultAnalyzer`. Pass an array of objects to enable Fallback Escalation (e.g. Local -> Cloud). |
+| `llm.<agentType>[].provider` | `string` | `"openai"` | `"openai"`, `"anthropic"`, `"gemini"`, or `"local"`. |
+| `llm.<agentType>[].model` | `string` | `"gpt-4o"` | The model ID (e.g., `"llama3.1"`). |
+| `llm.<agentType>[].apiKey` | `string` | `""` | Can use `env:VAR_NAME` to load securely from env. |
+| `llm.<agentType>[].baseUrl` | `string` | `""` | Custom endpoint (e.g., `"http://localhost:11434/v1"` for Ollama). |
+| `audit.avoidText` | `string[]` | `["delete", "cancel subscription", ...]` | Strings that trigger a hard-abort if found on a button. |
+| `audit.neverSubmitForms` | `string[]` | `["payment", "checkout"]` | Form actions/IDs that the AI is forbidden from submitting. |
+| `audit.maxPages` | `number` | `10` | Maximum pages the Audit crawler will index via BFS. |
+| `audit.maxElementsPerPage`| `number`| `15` | Maximum interactive elements audited per page. |
+| `audit.maxAuditDurationMinutes`|`number`| `30` | Time ceiling for a single audit run. |
+| `audit.maxCostUsd` | `number` | `2.00` | Hard USD cost ceiling for API tokens across a single audit. |
+
+### 🚧 Project Status & Limitations
+
+- **Audit Mode Maturity:** Highly functional but experimental. It relies heavily on Playwright coordinate bounding boxes and AI visual reasoning, which can occasionally misclick on highly complex SPAs or layered modals.
+- **Local Model Reliability:** While `llama3.1` (via Ollama) is supported, local models occasionally struggle with perfectly conforming to the strict JSON schemas required by the test planner. **Fallback Escalation is highly recommended** to seamlessly catch and recover from parsing failures.
+- **Framework Support:** Works generically across any framework via Playwright, but has been battle-tested most extensively against React/Vite SPAs.
+
+### 🚑 Troubleshooting / FAQ
+
+- **Worker hangs or throws `ECONNREFUSED`:** Your Redis instance isn't running. Start it with `docker run -d -p 6379:6379 redis`.
+- **Playwright fails to launch Chromium:** You are missing the browser binaries. Run `npx playwright install`.
+- **"Provider <name> failed compatibility check":** The pre-flight Canary Check failed. Ensure your API key is correctly exported in your `.env` or that your local Ollama server is actually running and `baseUrl` is correct.
+- **"fetch failed" / Target URL unreachable:** Ensure your actual application's dev server (e.g., Vite/Next.js) is actively running on the exact `targetUrl` specified in your config.
+
+### 📁 Project Structure
+
+D-bug is a modular monorepo:
+
+| Package | Role | Description |
+|---|---|---|
+| `packages/llm-agents` | **The Brain** | Houses the LLM provider adapters, fallback orchestration, and the distinct Agent prompts. |
+| `packages/test-executor` | **The Hands** | An MCP Server that exposes Playwright browser actions as callable tools for the LLM. |
+| `packages/cli` | **Nervous System** | The Git Watcher, BullMQ worker daemon, and CLI orchestrator. |
+| `packages/db` | **The Memory** | Prisma schema and SQLite database. |
+| `packages/dashboard` | **The Face** | A Vite + React frontend for visualizing real-time test executions. |
+
+### 🛠️ Local Development Setup
+
+To build and run the monorepo from scratch:
 
 ```bash
-# Start a lightweight Redis server in memory (can be run from anywhere)
-npx redis-memory-server
+# 1. Install dependencies across workspaces
+npm install
+
+# 2. Build TypeScript
+npm run build
+
+# 3. Sync Database Schema
+npx prisma db push --schema=packages/db/prisma/schema.prisma
+
+# 4. Link CLI globally
+npm link --workspace=@autoqa/cli
+
+# 5. Start stack
+npm run start:all
 ```
 
-### Quick Start
-Follow these steps to initialize AutoQA in any target project (like `Eventra`).
+### 🗺 Roadmap & Contributing
+*(No formal `CONTRIBUTING.md` exists yet. Feel free to open an issue or PR with suggestions!)*
 
-**1. Initialization (Run once per target project)**
-Initialize AutoQA in your target project. This creates an `autoqa.config.json` in that directory and provisions the global SQLite database.
-```bash
-# MUST be run from inside your TARGET project directory (e.g., cd ~/Documents/Eventra)
-npx tsx /home/samash/Documents/Localdev/autoqa/packages/cli/bin/autoqa.ts init
-```
-
-**2. Start Background Services**
-You must leave these running in separate terminals. They listen for queue jobs and broadcast updates.
-```bash
-# MUST be run from inside your TARGET project directory
-# Terminal 1 (Queue Worker):
-npx tsx /home/samash/Documents/Localdev/autoqa/packages/cli/bin/autoqa.ts worker
-
-# Terminal 2 (Dashboard Backend):
-npx tsx /home/samash/Documents/Localdev/autoqa/packages/cli/bin/autoqa.ts dashboard-server
-```
-
-*(Optional)* If you want to view the React UI dashboard to see test progress:
-```bash
-# MUST be run from the AutoQA directory
-cd /home/samash/Documents/Localdev/autoqa
-npm run dev --workspace=packages/dashboard
-```
-
-**3. Triggering Tests**
-You can manually trigger tests or watch your project for file changes to automatically generate them.
-```bash
-# MUST be run from inside your TARGET project directory
-
-# Run a specific manual AI test:
-npx tsx /home/samash/Documents/Localdev/autoqa/packages/cli/bin/autoqa.ts test "Verify that the homepage loads"
-
-# Run a deterministic smoke test (skips the LLM entirely):
-npx tsx /home/samash/Documents/Localdev/autoqa/packages/cli/bin/autoqa.ts smoke
-
-# Watch your target code for changes and auto-trigger tests based on git commits:
-npx tsx /home/samash/Documents/Localdev/autoqa/packages/cli/bin/autoqa.ts watch
-```
-
-## Configuration Reference
-
-The `autoqa.config.json` file is created in your project root after running `init`.
-
-| Field | Description | Default |
-|-------|-------------|---------|
-| `targetUrl` | The local development server URL your app runs on. | `http://localhost:3000` |
-| `ignoredPaths` | Comma-separated paths the git watcher should ignore. | `["node_modules", "dist", "build", "coverage"]` |
-| `geminiApiKey` | Your Google Gemini API Key for the LLM reasoning engine. | *Reads from `process.env.GEMINI_API_KEY`* |
-| `databaseUrl` | Location of the global SQLite database used by AutoQA. | `file:~/.autoqa/dev.db` |
-| `testUserCredentials` | Credentials for test accounts to handle authentication flows. | *(Optional/Not set by default)* |
-
-## CLI Reference
-
-| Command | Options | Description |
-|---------|---------|-------------|
-| `init` | None | Initializes AutoQA config (`autoqa.config.json`) and database in the current project. |
-| `test <instruction>` | `--url <url>` | Runs a single AI-driven test against the local dev server. |
-| `smoke` | `--url <url>` | Runs a deterministic smoke test, bypassing the LLM. |
-| `watch` | `--url <url>` | Watches the git repository for new commits to autonomously enqueue tests. |
-| `worker` | None | Starts the BullMQ worker to process queued tests in the background. |
-| `dashboard-server`| None | Starts the real-time Socket.IO backend for the dashboard UI. |
-| `review` | None | Reviews discovered features and prompts you to auto-generate tests (Legacy). |
-
-## Trust and Honesty
-
-### Project Status & Limitations
-We believe in being completely transparent about what AutoQA can and cannot do right now:
-- **What Works**: Basic navigation, standard interactions (clicking buttons, filling forms), queue management, and real-time dashboard reporting are fully functional. Smoke tests run flawlessly.
-- **What's Flaky**: LLM reasoning can occasionally hallucinate DOM elements or get stuck in loops if the UI changes unexpectedly in complex ways. Complex drag-and-drop or canvas interactions are currently unstable.
-- **What Doesn't Yet**: Seamless handling of CAPTCHAs, multi-factor authentication flows, and highly dynamic WebGL applications.
-
-### Troubleshooting & FAQ
-
-**Q: AutoQA crashes immediately on startup / Worker fails.**
-**A:** Is your Redis server running? AutoQA requires Redis for the BullMQ queue. Run `npx redis-memory-server` in a separate terminal.
-
-**Q: Playwright errors saying "Browser not installed".**
-**A:** You need to install the browser binaries for Playwright. Run `npx playwright install` in your terminal.
-
-**Q: "Target URL unreachable" error.**
-**A:** Ensure your target application's local development server (e.g., `npm run dev`) is actually running on the port specified in `targetUrl` (default is 3000).
-
-**Q: MCP Connection Issues / LLM isn't responding.**
-**A:** Double-check that your `geminiApiKey` is correctly set in `autoqa.config.json` or as an environment variable. If the MCP connection fails, verify your internet connection or check if the API provider is experiencing downtime.
+---
+*Built with ❤️ to make E2E testing painless.*
