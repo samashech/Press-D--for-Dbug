@@ -20,10 +20,17 @@ export async function runCrawl(startUrl: string, repoPath: string) {
   const visited = new Set<string>();
   const toVisit = [startUrl];
   
+  let maxPages = 10;
+  const configPath = path.join(process.cwd(), 'autoqa.config.json');
+  if (fs.existsSync(configPath)) {
+    const conf = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    maxPages = conf.audit?.maxPages || 10;
+  }
+
   const discoveredPages: any[] = [];
 
   try {
-    while (toVisit.length > 0) {
+    while (toVisit.length > 0 && discoveredPages.length < maxPages) {
       const currentUrl = toVisit.shift()!;
       if (visited.has(currentUrl)) continue;
       

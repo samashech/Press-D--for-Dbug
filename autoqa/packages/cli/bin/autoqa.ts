@@ -192,6 +192,7 @@ program
   .description('Audit the current project by crawling and classifying features, saving them to the DB')
   .argument('[repoPath]', 'Repository path to audit', process.cwd())
   .option('--url <url>', 'Local dev server URL (overrides config)')
+  .option('--force', 'Retest all features regardless of previous coverage')
   .action(async (repoPath, options) => {
     const path = require('path');
     await requireConfig();
@@ -214,25 +215,121 @@ program
       
       const projectId = await getOrCreateProject(path.resolve(repoPath), url);
       
-      for (const feature of result.features) {
-        await prisma.feature.create({
-          data: {
-            projectId,
-            name: feature.name,
-            description: feature.description,
-            status: 'discovered',
-            discoveredVia: 'crawl',
-            pageUrl: feature.pageUrl || page.url,
-            selector: feature.selector,
-            featureType: feature.featureType
-          }
+      const maxElements = globalConfig.audit?.maxElementsPerPage || 15;
+      const limitedFeatures = result.features.slice(0, maxElements);
+
+      for (const feature of limitedFeatures) {
+        // Find existing to check covered status
+        const existing = await prisma.feature.findFirst({
+          where: { projectId, selector: feature.selector, pageUrl: feature.pageUrl }
         });
-        totalFeatures++;
-        console.log(chalk.green(`  + Discovered [${feature.featureType}]: ${feature.name}`));
+
+        if (!existing) {
+          await prisma.feature.create({
+            data: {
+              projectId,
+              name: feature.name,
+              description: feature.description,
+              status: 'discovered',
+              discoveredVia: 'crawl',
+              pageUrl: feature.pageUrl || page.url,
+              selector: feature.selector,
+              featureType: feature.featureType
+            }
+          });
+          totalFeatures++;
+          console.log(chalk.green(`  + Discovered [${feature.featureType}]: ${feature.name}`));
+        } else {
+           console.log(chalk.gray(`  ~ Already known [${feature.featureType}]: ${feature.name}`));
+        }
       }
     }
     
-    console.log(chalk.bold.green(`\nAudit Discovery Complete! Saved ${totalFeatures} features to the database.`));
+    console.log(chalk.bold.green(`\nAudit Discovery Complete! Identified ${totalFeatures} new features.`));
+    
+    console.log(chalk.blue('\nStarting Phase C & D: Execution against budget...'));
+    const { executeFeatureAudit } = require('@autoqa/llm-agents');
+    const { calculateCost } = require('@autoqa/llm-agents/providers/cost-calculator');
+    
+    const projectId = await getOrCreateProject(path.resolve(repoPath), url);
+    const featuresToTest = await prisma.feature.findMany({
+      where: options.force ? { projectId } : { projectId, covered: false }
+    });
+
+    const maxDuration = (globalConfig.audit?.maxAuditDurationMinutes || 30) * 60 * 1000;
+    const maxCost = globalConfig.audit?.maxCostUsd || 2.00;
+    const startTime = Date.now();
+    let totalCost = 0;
+    let testedCount = 0;
+    let skippedCount = 0;
+    const typeStats: Record<string, { pass: number; fail: number }> = {};
+
+    for (const feat of featuresToTest) {
+      if (!typeStats[feat.featureType]) {
+        typeStats[feat.featureType] = { pass: 0, fail: 0 };
+      }
+
+      if (Date.now() - startTime > maxDuration) {
+        console.log(chalk.red(`\n[Budget] Max audit duration reached. Stopping.`));
+        break;
+      }
+      if (totalCost >= maxCost) {
+        console.log(chalk.red(`\n[Budget] Max cost ($${maxCost}) reached. Stopping.`));
+        break;
+      }
+
+      console.log(chalk.bold(`\nTesting Feature: ${feat.name} [${feat.featureType}]`));
+      
+      const testRun = await prisma.testRun.create({
+        data: { featureId: feat.id, status: 'running', mode: 'audit' }
+      });
+
+      try {
+        const result = await executeFeatureAudit(testRun.id, feat, url);
+        
+        if (result.status === 'skipped') {
+          skippedCount++;
+          await prisma.testRun.update({ where: { id: testRun.id }, data: { status: 'skipped' } });
+        } else {
+          testedCount++;
+          await prisma.feature.update({
+            where: { id: feat.id },
+            data: { covered: true, lastTestedAt: new Date(), status: 'verified' }
+          });
+          await prisma.testRun.update({
+            where: { id: testRun.id },
+            data: { status: 'passed' }
+          });
+          typeStats[feat.featureType].pass++;
+        }
+        
+        // Track cost
+        for (const u of (result.usages || [])) {
+           const runCost = calculateCost(u.provider, u.model, u.promptTokens, u.completionTokens);
+           totalCost += runCost;
+           await prisma.lLMUsage.create({
+             data: { testRunId: testRun.id, provider: u.provider, model: u.model, promptTokens: u.promptTokens, completionTokens: u.completionTokens }
+           });
+        }
+        
+      } catch (err: any) {
+        console.log(chalk.red(`Error testing feature: ${err.message}`));
+        await prisma.testRun.update({ where: { id: testRun.id }, data: { status: 'failed' } });
+        typeStats[feat.featureType].fail++;
+      }
+    }
+
+    console.log(chalk.bold.blue('\n=== Audit Report ==='));
+    console.log(`Discovered: ${totalFeatures}`);
+    console.log(`Tested: ${testedCount}`);
+    console.log(`Skipped (Guardrail/Budget): ${skippedCount}`);
+    console.log(`Total Cost: $${totalCost.toFixed(4)}`);
+    console.log(chalk.bold(`\nBy Feature Type:`));
+    for (const [type, stats] of Object.entries(typeStats)) {
+      console.log(`  - ${type}: ${stats.pass} passed, ${stats.fail} failed`);
+    }
+    console.log(chalk.bold.blue('====================\n'));
+    process.exit(0);
   });
 
 program

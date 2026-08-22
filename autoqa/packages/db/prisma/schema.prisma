@@ -42,6 +42,10 @@ model Feature {
   pageUrl       String?
   selector      String?
   featureType   String?  // button | form | nav-link | animation-candidate | api-endpoint | llm-integration
+  
+  covered       Boolean  @default(false)
+  lastTestedAt  DateTime?
+
   testRuns      TestRun[]
   llmUsages     LLMUsage[]
 }

@@ -40,6 +40,10 @@
     "avoidText": ["delete", "cancel subscription", "sign out", "log out", "remove account"],
     "avoidSelectors": [],
     "neverSubmitForms": ["payment", "checkout"],
-    "maxDestructiveConfidence": "skip-if-uncertain"
+    "maxDestructiveConfidence": "skip-if-uncertain",
+    "maxPages": 10,
+    "maxElementsPerPage": 15,
+    "maxAuditDurationMinutes": 30,
+    "maxCostUsd": 2.00
   }
 }
