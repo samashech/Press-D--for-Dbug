@@ -4,9 +4,10 @@ import { z } from 'zod';
 import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
-import { LLMProvider, Message } from './providers/types';
+import { LLMProvider, Message, ToolDefinition, ToolCall } from './providers/types';
 import { convertMcpTools } from './providers/mcp-converter';
 import { getRoleProvider } from './providers/factory';
+import { isElementSafe } from './guardrails';
 
 export const TestPlanSchema = z.object({
   steps: z.array(z.object({
@@ -202,3 +203,53 @@ Once you have verified the instruction or are absolutely stuck, call 'playwright
     usages: usageArray
   };
 }
+
+export async function executeFeatureAudit(
+  testRunId: string, 
+  feature: any, 
+  url: string,
+  provider?: LLMProvider
+) {
+  provider = provider || getRoleProvider('testPlanner');
+  
+  // Phase C: Safety Guardrails
+  console.log(chalk.gray(`\nChecking safety guardrails for feature: ${feature.name}...`));
+  const safeCheck = await isElementSafe({
+    text: feature.name,
+    selector: feature.selector || undefined
+  });
+
+  if (!safeCheck.isSafe) {
+    console.log(chalk.yellow(`Skipped testing feature [${feature.name}]. Reason: ${safeCheck.reason}`));
+    return { status: 'skipped', reason: safeCheck.reason, usages: [] };
+  }
+
+  // Phase D: Per-type test strategies
+  let instruction = '';
+  switch (feature.featureType) {
+    case 'button':
+      instruction = `Interact with the button at selector "${feature.selector}". First, observe the page state (URL, text). Click the button, and explicitly assert what changed (e.g., URL change, new element, or text update).`;
+      break;
+    case 'form':
+      instruction = `Interact with the form at selector "${feature.selector}". Fill the form using SAFE, MOCK fixture data (do not use real PII or payment info). Submit it, and check for the expected success or validation behavior.`;
+      break;
+    case 'animation-candidate':
+      instruction = `Test the animation for element "${feature.selector}". Use the 'playwright_check_animation' tool with durationMs: 500 to confirm its bounding box actually changes visibly.`;
+      break;
+    case 'api-endpoint':
+      instruction = `Test the API endpoint "${feature.pageUrl}". Use the 'playwright_api_fetch' tool to call it directly. Verify that the response status code is 200 or appropriate.`;
+      break;
+    case 'llm-integration':
+      instruction = `Exercise the LLM/AI integration at "${feature.selector}". Submit a benign prompt (e.g., "Hello") and verify that a response is returned within a reasonable time. Do not assert the output content, just that it functions.`;
+      break;
+    default:
+      instruction = `Interact with the element "${feature.name}" at selector "${feature.selector}" and verify it functions correctly.`;
+  }
+
+  console.log(chalk.blue(`\nRunning Audit Test for [${feature.featureType}]: ${feature.name}`));
+  console.log(chalk.gray(`Instruction: ${instruction}`));
+
+  const result = await executeTestAutonomous(testRunId, instruction, feature.pageUrl || url, provider);
+  return { ...result, status: 'verified' };
+}
+

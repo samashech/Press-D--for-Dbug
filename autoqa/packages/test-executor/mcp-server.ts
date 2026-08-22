@@ -65,6 +65,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
+        name: 'playwright_api_fetch',
+        description: 'Make a direct API request from the browser context to test endpoints',
+        inputSchema: {
+          type: 'object',
+          properties: { 
+            url: { type: 'string' },
+            method: { type: 'string' },
+            body: { type: 'string' }
+          },
+          required: ['url']
+        }
+      },
+      {
+        name: 'playwright_check_animation',
+        description: 'Check if an element visibly animates over a short duration',
+        inputSchema: {
+          type: 'object',
+          properties: { selector: { type: 'string' }, durationMs: { type: 'number' } },
+          required: ['selector']
+        }
+      },
+      {
         name: 'playwright_get_network_activity',
         description: 'Get list of network endpoints captured since the browser started',
         inputSchema: {
@@ -141,6 +163,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }).filter(e => e.visible);
       });
       return { content: [{ type: 'text', text: JSON.stringify(snapshot, null, 2) }] };
+    }
+
+    if (name === 'playwright_api_fetch') {
+      const result = await page.evaluate(async ({ url, method, body }) => {
+        try {
+          const res = await fetch(url, { method: method || 'GET', body: body || undefined });
+          return { status: res.status, ok: res.ok, text: await res.text().catch(()=>'') };
+        } catch (e: any) {
+          return { error: e.message };
+        }
+      }, { url: args?.url as string, method: args?.method as string, body: args?.body as string });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+
+    if (name === 'playwright_check_animation') {
+      const result = await page.evaluate(async ({ selector, durationMs }) => {
+        const el = document.querySelector(selector);
+        if (!el) return { error: `Element ${selector} not found` };
+        const getBox = () => { const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
+        const box1 = getBox();
+        await new Promise(res => setTimeout(res, durationMs || 500));
+        const box2 = getBox();
+        const changed = box1.some((v, i) => v !== box2[i]);
+        return { changed, box1, box2 };
+      }, { selector: args?.selector as string, durationMs: args?.durationMs as number });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
 
     if (name === 'playwright_get_network_activity') {
